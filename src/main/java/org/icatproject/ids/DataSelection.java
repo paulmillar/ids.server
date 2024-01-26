@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 
 import javax.json.Json;
@@ -69,6 +70,7 @@ public class DataSelection {
 	private Set<Long> emptyDatasets;
 	private boolean dsWanted;
 	private Session restSession;
+	private long length;
 
 	public static int maxEntities = PropertyHandler.getInstance().getMaxEntities();
 
@@ -116,6 +118,7 @@ public class DataSelection {
 					dsInfos.put(dsid, new DsInfoImpl(ds));
 					if (dfWanted) {
 						Datafile df = (Datafile) icat.get(sessionId, "Datafile", dfid);
+						length += df.getFileSize();
 						String location = IdsBean.getLocation(dfid, df.getLocation());
 						dfInfos.add(
 								new DfInfoImpl(dfid, df.getName(), location, df.getCreateId(), df.getModId(), dsid));
@@ -288,4 +291,10 @@ public class DataSelection {
 		return emptyDatasets;
 	}
 
+	public OptionalLong getFileLength() {
+		if (!dfWanted || mustZip()) {
+			return OptionalLong.empty();
+		}
+		return OptionalLong.of(length);
+	}
 }

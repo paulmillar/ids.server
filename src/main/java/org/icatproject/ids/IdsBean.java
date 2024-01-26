@@ -20,6 +20,7 @@ import java.util.GregorianCalendar;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
@@ -49,7 +50,9 @@ import javax.json.JsonObject;
 import javax.json.JsonReader;
 import javax.json.JsonValue;
 import javax.json.stream.JsonGenerator;
+import static javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.ResponseBuilder;
 import javax.ws.rs.core.StreamingOutput;
 import javax.xml.datatype.DatatypeFactory;
 
@@ -877,6 +880,7 @@ public class IdsBean {
 		// Do it
 		Map<Long, DsInfo> dsInfos = dataSelection.getDsInfo();
 		Set<DfInfoImpl> dfInfos = dataSelection.getDfInfo();
+		OptionalLong length = zip ? OptionalLong.empty() : dataSelection.getFileLength();
 
 		/*
 		 * Lock the datasets which prevents deletion of datafiles within the
@@ -933,11 +937,14 @@ public class IdsBean {
 			}
 		}
 
-		return Response.status(offset == 0 ? HttpURLConnection.HTTP_OK : HttpURLConnection.HTTP_PARTIAL)
+		ResponseBuilder response = Response.status(offset == 0 ? HttpURLConnection.HTTP_OK : HttpURLConnection.HTTP_PARTIAL)
 				.entity(new SO(dataSelection.getDsInfo(), dataSelection.getDfInfo(), offset, finalZip, compress, lockId,
 						transferId, ip, start))
-				.header("Content-Disposition", "attachment; filename=\"" + name + "\"").header("Accept-Ranges", "bytes")
-				.build();
+				.header("Content-Disposition", "attachment; filename=\"" + name + "\"").header("Accept-Ranges", "bytes");
+		length.stream()
+			.map(l -> Math.max(0L, l - offset))
+			.forEach(l -> response.header(CONTENT_LENGTH, l));
+		return response.build();
 	}
 
 	public String getDatafileIds(String preparedId, String ip)
