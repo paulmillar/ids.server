@@ -20,7 +20,6 @@ import java.util.Map.Entry;
 import static java.util.Objects.requireNonNull;
 import java.util.Set;
 import static java.util.stream.Collectors.reducing;
-import java.util.function.Consumer;
 import java.util.zip.CRC32;
 import java.util.zip.CheckedInputStream;
 
@@ -30,6 +29,7 @@ import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
 import jakarta.json.JsonValue;
+import java.util.function.Consumer;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -290,6 +290,12 @@ public class TestingClient {
     }
 
     public InputStream getData(String sessionId, DataSelection data, Flag flags, long offset, Integer sc)
+            throws NotImplementedException, BadRequestException, InsufficientPrivilegesException, NotFoundException,
+            InternalException, DataNotOnlineException {
+        return getData(sessionId, data, flags, offset, sc, null);
+    }
+
+    public InputStream getData(String sessionId, DataSelection data, Flag flags, long offset, Integer sc, Consumer<HttpResponse> responseAssertion)
             throws NotImplementedException, BadRequestException, InsufficientPrivilegesException, NotFoundException,
             InternalException, DataNotOnlineException {
 

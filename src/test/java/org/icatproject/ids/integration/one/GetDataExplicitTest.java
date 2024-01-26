@@ -1,7 +1,12 @@
 package org.icatproject.ids.integration.one;
 
+import static jakarta.ws.rs.core.HttpHeaders.CONTENT_LENGTH;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.function.Consumer;
+import org.apache.http.HttpResponse;
+import static org.hamcrest.Matchers.*;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import static org.junit.Assert.assertEquals;
 import org.junit.BeforeClass;
@@ -183,8 +188,11 @@ public class GetDataExplicitTest extends BaseTest {
         }
 
         var datafileId = datafileIds.get(0);
+        var fileLength = fileLength(datafileId);
         try (InputStream stream = testingClient
-                .assertingHttpResponse(isChunkedEncoded())
+                .assertingHttpResponse(
+                    isNotChunkedEncoded(),
+                    hasHeader(CONTENT_LENGTH, fileLength))
                 .getData(sessionId, new DataSelection().addDatafile(datafileId),
                     Flag.NONE, 0, 200)) {
             checkStream(stream, datafileIds.get(0));
@@ -201,9 +209,13 @@ public class GetDataExplicitTest extends BaseTest {
             checkZipStream(stream, datafileIds, 0);
         }
 
+        var datafileId = datafileIds.get(0);
+        var fileLength = fileLength(datafileId);
         try (InputStream stream = testingClient
-                .assertingHttpResponse(isChunkedEncoded())
-                .getData(sessionId, new DataSelection().addDatafile(datafileIds.get(0)),
+                .assertingHttpResponse(
+                        isNotChunkedEncoded(),
+                        hasHeader(CONTENT_LENGTH, fileLength))
+                .getData(sessionId, new DataSelection().addDatafile(datafileId),
                 Flag.COMPRESS, 0, 200)) {
             checkStream(stream, datafileIds.get(0));
         }
