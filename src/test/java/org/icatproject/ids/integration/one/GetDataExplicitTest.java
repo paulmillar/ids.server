@@ -9,6 +9,8 @@ import org.junit.Test;
 
 import org.icatproject.Datafile;
 import org.icatproject.ids.integration.BaseTest;
+import org.icatproject.ids.integration.util.FileRequirements;
+import static org.icatproject.ids.integration.util.FileRequirements.Requirement.BIG_DATAFILES;
 import org.icatproject.ids.integration.util.Setup;
 import org.icatproject.ids.integration.util.client.BadRequestException;
 import org.icatproject.ids.integration.util.client.DataSelection;
@@ -17,6 +19,7 @@ import org.icatproject.ids.integration.util.client.NotFoundException;
 import org.icatproject.ids.integration.util.client.TestingClient.Flag;
 import static org.icatproject.ids.integration.util.client.TestingClient.isNotChunkedEncoded;
 import static org.icatproject.ids.integration.util.client.TestingClient.hasHeader;
+import static org.icatproject.ids.integration.util.client.TestingClient.isChunkedEncoded;
 
 public class GetDataExplicitTest extends BaseTest {
 
@@ -166,6 +169,79 @@ public class GetDataExplicitTest extends BaseTest {
                 .getData(sessionId, new DataSelection().addDatafile(datafileIds.get(0)),
                     Flag.ZIP_AND_COMPRESS, 0, 200)) {
             checkZipStream(stream, datafileIds.subList(0, 1), 36L, 0);
+        }
+    }
+
+    @FileRequirements(BIG_DATAFILES)
+    @Test
+    public void correctBehaviourBigFileTestNone() throws Exception {
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafiles(datafileIds),
+                    Flag.NONE, 0, 200)) {
+            checkZipStream(stream, datafileIds, 0);
+        }
+
+        var datafileId = datafileIds.get(0);
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafile(datafileId),
+                    Flag.NONE, 0, 200)) {
+            checkStream(stream, datafileIds.get(0));
+        }
+    }
+
+    @FileRequirements(BIG_DATAFILES)
+    @Test
+    public void correctBehaviourBigFileTestCompress() throws Exception {
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafiles(datafileIds),
+                    Flag.COMPRESS, 0, 200)) {
+            checkZipStream(stream, datafileIds, 0);
+        }
+
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafile(datafileIds.get(0)),
+                Flag.COMPRESS, 0, 200)) {
+            checkStream(stream, datafileIds.get(0));
+        }
+    }
+
+    @FileRequirements(BIG_DATAFILES)
+    @Test
+    public void correctBehaviourBigFileTestZip() throws Exception {
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafiles(datafileIds),
+                    Flag.ZIP, 0, 200)) {
+            checkZipStream(stream, datafileIds, 0);
+        }
+
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafile(datafileIds.get(0)),
+                    Flag.ZIP, 0, 200)) {
+            checkZipStream(stream, datafileIds.subList(0, 1), 0);
+        }
+    }
+
+    @FileRequirements(BIG_DATAFILES)
+    @Test
+    public void correctBehaviourBigFileTestZipAndCompress() throws Exception {
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafiles(datafileIds),
+                    Flag.ZIP_AND_COMPRESS, 0, 200)) {
+            checkZipStream(stream, datafileIds, 0);
+        }
+
+        try (InputStream stream = testingClient
+                .assertingHttpResponse(isChunkedEncoded())
+                .getData(sessionId, new DataSelection().addDatafile(datafileIds.get(0)),
+                    Flag.ZIP_AND_COMPRESS, 0, 200)) {
+            checkZipStream(stream, datafileIds.subList(0, 1), 0);
         }
     }
 

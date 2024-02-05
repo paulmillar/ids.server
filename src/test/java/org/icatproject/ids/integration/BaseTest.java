@@ -15,6 +15,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -22,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.CRC32;
@@ -50,12 +53,17 @@ import org.icatproject.InvestigationType;
 import org.icatproject.icat.client.ICAT;
 import org.icatproject.icat.client.Session;
 import org.icatproject.ids.ICATGetter;
+import org.icatproject.ids.integration.util.FileRequirements;
 import org.icatproject.ids.integration.util.Setup;
 import org.icatproject.ids.integration.util.client.DataSelection;
 import org.icatproject.ids.integration.util.client.TestingClient;
 import org.icatproject.ids.integration.util.client.TestingClient.Flag;
 import org.icatproject.ids.integration.util.client.TestingClient.ServiceStatus;
 import org.icatproject.ids.integration.util.client.TestingClient.Status;
+import static org.icatproject.ids.integration.util.FileRequirements.Requirement.BIG_DATAFILES;
+import org.junit.Rule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 
 public class BaseTest {
 
@@ -78,6 +86,25 @@ public class BaseTest {
             }
         }
 
+    }
+
+    /**
+     * A TestWatcher that keeps track of the file requirements of a test.
+     */
+    public static class FileRequirementsWatcher extends TestWatcher {
+        private volatile Optional<FileRequirements> requirements;
+
+        @Override
+        protected void starting(Description description) {
+            var annotation = description.getAnnotation(FileRequirements.class);
+            requirements =  Optional.ofNullable(annotation);
+        }
+
+        public boolean isNeeded(FileRequirements.Requirement requirement) {
+            return requirements
+                    .filter(r -> Arrays.stream(r.value()).anyMatch(requirement::equals))
+                    .isPresent();
+        }
     }
 
     private static long timestamp = System.currentTimeMillis();
@@ -113,6 +140,9 @@ public class BaseTest {
     protected DatafileFormat supportedDatafileFormat;
     protected long investigationId;
     private long time;
+
+    @Rule
+    public FileRequirementsWatcher fileRequirements = new FileRequirementsWatcher();
 
     @Before
     public void before() throws Exception {
@@ -168,8 +198,8 @@ public class BaseTest {
         time = now;
     }
 
-    protected void checkZipFile(Path file, List<Long> ids, int compressedSize) throws IOException {
-        checkZipStream(Files.newInputStream(file), ids, compressedSize, 0);
+    protected void checkZipFile(Path file, List<Long> ids, long compressedSize) throws IOException {
+        checkZipStream(Files.newInputStream(file), ids, Long.valueOf(compressedSize), 0);
     }
 
     private void clearStorage() throws IOException {
@@ -279,25 +309,25 @@ public class BaseTest {
             df1.setName("a/df1_" + timestamp);
             df1.setLocation(ds1Loc + UUID.randomUUID());
             df1.setDataset(ds1);
-            writeToFile(df1, "df1 test content very compressible very compressible", key);
+            writeToFile(df1, fileContents("df1"), key);
 
             Datafile df2 = new Datafile();
             df2.setName("df2_" + timestamp);
             df2.setLocation(ds1Loc + UUID.randomUUID());
             df2.setDataset(ds1);
-            writeToFile(df2, "df2 test content very compressible very compressible", key);
+            writeToFile(df2, fileContents("df2"), key);
 
             Datafile df3 = new Datafile();
             df3.setName("df3_" + timestamp);
             df3.setLocation(ds2Loc + UUID.randomUUID());
             df3.setDataset(ds2);
-            writeToFile(df3, "df3 test content very compressible very compressible", key);
+            writeToFile(df3, fileContents("df3"), key);
 
             Datafile df4 = new Datafile();
             df4.setName("df4_" + timestamp);
             df4.setLocation(ds2Loc + "Person's file");
             df4.setDataset(ds2);
-            writeToFile(df4, "df4 test content very compressible very compressible", key);
+            writeToFile(df4, fileContents("df4"), key);
 
             datasetIds.add(ds1.getId());
             datasetIds.add(ds2.getId());
@@ -327,6 +357,12 @@ public class BaseTest {
 
     }
 
+    private String fileContents(String prefix) {
+        return fileRequirements.isNeeded(BIG_DATAFILES)
+                ? generateRandomString(16*1024) // 16 KiB of random data.
+                : (prefix + " test content very compressible very compressible");
+    }
+
     protected Map<String, String> crcs = new HashMap<>();
     protected Map<String, Long> fsizes = new HashMap<>();
     protected Map<String, String> contents = new HashMap<>();
@@ -334,6 +370,16 @@ public class BaseTest {
     protected Map<String, String> paths = new HashMap<>();
 
     protected void checkZipStream(InputStream stream, List<Long> datafileIdsIn, long compressedSize, int numLeft)
+            throws IOException {
+        checkZipStream(stream, datafileIdsIn, Long.valueOf(compressedSize), numLeft);
+    }
+
+    protected void checkZipStream(InputStream stream, List<Long> datafileIdsIn, int numLeft)
+            throws IOException {
+        checkZipStream(stream, datafileIdsIn, null, numLeft);
+    }
+
+    private void checkZipStream(InputStream stream, List<Long> datafileIdsIn, Long compressedSize, int numLeft)
             throws IOException {
         ZipInputStream zis = new ZipInputStream(stream);
         ZipEntry ze = zis.getNextEntry();
@@ -348,7 +394,9 @@ public class BaseTest {
                 n = n + length;
             }
             String key = paths.get(ze.getName());
-            assertEquals(compressedSize, ze.getCompressedSize());
+            if (compressedSize != null) {
+                assertEquals((long)compressedSize, ze.getCompressedSize());
+            }
             assertEquals(crcs.get(key), Long.toHexString(ze.getCrc()));
             assertEquals(contents.get(key), baos.toString());
             assertEquals(fsizes.get(key), (Long) n);
@@ -379,6 +427,23 @@ public class BaseTest {
             }
         }
         throw new NoSuchElementException("No file with id " + id);
+    }
+
+    /**
+     * Generate a random string of alphanumeric characters that has the target
+     * length.  Code is largely taken from:
+     * https://www.baeldung.com/java-random-string
+     */
+    private String generateRandomString(long targetLength) {
+        int leftLimit = 48; // numeral '0'
+        int rightLimit = 122; // letter 'z'
+        Random random = new Random();
+
+        return random.ints(leftLimit, rightLimit + 1)
+              .filter(i -> (i <= 57 || i >= 65) && (i <= 90 || i >= 97))
+              .limit(targetLength)
+              .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+              .toString();
     }
 
     protected void writeToFile(Datafile df, String content, String key)
